@@ -33,7 +33,8 @@ export default function Home() {
   const placePanel = (info, narrow) => {
     const panel = panelRef.current
     if (!panel) return
-    if (narrow || !info) {
+    const ok = info && [info.x, info.y, info.r, info.dist].every(Number.isFinite)
+    if (narrow || !ok) {
       panel.style.transform = ''
       panel.style.opacity = narrow ? '1' : '0'
       return
@@ -66,7 +67,7 @@ export default function Home() {
       const chip = chipRef.current
       const pos = engine.screenPos(activeRef.current)
       if (chip) {
-        if (pos && pos.dist > 2.5 && pos.dist < 14) {
+        if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y) && pos.dist > 2.5 && pos.dist < 14) {
           chip.style.opacity = '1'
           chip.style.transform = `translate(${Math.round(pos.x)}px, ${Math.round(pos.y)}px)`
         } else {

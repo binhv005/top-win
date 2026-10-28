@@ -261,9 +261,13 @@ export function createSpace(canvas, opts) {
   let progress = 0
   let smooth = 0
   let hideAt = 1.2
+  let sized = false
   const resize = () => {
     const w = canvas.clientWidth
     const h = canvas.clientHeight
+    // canvas chưa có kích thước (tab nền, đang tải lại…) → chờ ResizeObserver gọi lại
+    sized = w > 0 && h > 0
+    if (!sized) return
     renderer.setSize(w, h, false)
     camera.aspect = w / h
     camera.updateProjectionMatrix()
@@ -278,6 +282,8 @@ export function createSpace(canvas, opts) {
   }
   resize()
   window.addEventListener('resize', resize)
+  const ro = 'ResizeObserver' in window ? new ResizeObserver(() => resize()) : null
+  ro?.observe(canvas)
 
   const m = new THREE.Matrix4()
   const q = new THREE.Quaternion()
@@ -368,7 +374,7 @@ export function createSpace(canvas, opts) {
     // Toạ độ màn hình (px) của khối thứ i, dùng để đặt nhãn nổi.
     screenPos(i) {
       const c = crystals[i]
-      if (!c) return null
+      if (!c || !sized) return null
       projected.copy(c.position)
       projected.y += 2
       projected.project(camera)
@@ -382,7 +388,7 @@ export function createSpace(canvas, opts) {
     // Tâm và bán kính (px) của khối thứ i trên màn hình — để đặt bảng thông tin bên cạnh.
     screenInfo(i) {
       const c = crystals[i]
-      if (!c) return null
+      if (!c || !sized) return null
       const w = canvas.clientWidth
       const h = canvas.clientHeight
       projected.copy(c.position).project(camera)
@@ -397,6 +403,7 @@ export function createSpace(canvas, opts) {
       running = false
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', resize)
+      ro?.disconnect()
       window.removeEventListener('pointermove', onMouse)
       scene.traverse((o) => {
         o.geometry?.dispose()
