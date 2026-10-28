@@ -1,0 +1,39 @@
+# ===== Tài liệu nội bộ của khách hàng — không đưa lên git =====
+# (hồ sơ ISO, biểu BOM có tên khách hàng, file quy trình, danh sách máy móc, ảnh gốc)
+/AJA 2025/
+/AnhTuSanPham/
+/BIỂU B.O.M VÀ QUY TRÌNH SẢN XUẤT/
+/QUY TRÌNH SẢN XUẤT/
+/LoGo/
+*.xls
+*.xlsx
+*.doc
+*.docx
+*.pdf
+*.rar
+*.zip
+*.eps
+
+# ===== Thư mục làm việc tạm (ảnh trích xuất, ảnh kiểm tra, cache) =====
+/_clone-work/
+
+# ===== Node / Vite =====
+node_modules/
+dist/
+.vite/
+*.local
+
+# ===== Cấu hình riêng của từng máy =====
+# .npmrc trỏ cache npm vào ổ D của máy hiện tại
+website/.npmrc
+.env
+.env.*
+
+# ===== Log, hệ điều hành, editor =====
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
