@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { isSoftwareGL } from './gpu.js'
 
 // Bộ dựng cảnh "không gian pha lê" theo phong cách Noomo Showcase:
 // khối pha lê chứa ảnh, mảnh kính trôi, bụi sáng; camera bay theo thanh cuộn.
@@ -34,6 +35,14 @@ function crystalGeometry(radius, seed) {
 // Khối pha lê: ảnh sản phẩm nguyên vẹn (đúng tỉ lệ, đúng màu, luôn quay về phía người xem)
 // nằm bên trong một vỏ kính trong suốt có cạnh sáng — vỏ xoay, ảnh đứng yên.
 // Không truyền texture → khối pha lê đặc, óng ánh, không có ảnh (dùng cho trang con).
+// Không có GPU: dùng vật liệu Lambert (shader nhẹ) thay cho Physical (biên dịch rất chậm trên CPU).
+let lightMaterials = false
+function physMat(p) {
+  if (!lightMaterials) return new THREE.MeshPhysicalMaterial(p)
+  const { color, emissive, emissiveIntensity, transparent, opacity, depthWrite, flatShading } = p
+  return new THREE.MeshLambertMaterial({ color, emissive, emissiveIntensity, transparent, opacity, depthWrite, flatShading })
+}
+
 function makeCrystal(texture, radius, seed) {
   const group = new THREE.Group()
   const solid = !texture
@@ -53,7 +62,7 @@ function makeCrystal(texture, radius, seed) {
   const geo = crystalGeometry(radius, seed)
   const glass = new THREE.Mesh(
     geo,
-    new THREE.MeshPhysicalMaterial(
+    physMat(
       solid
         ? {
             color: 0x6f86ff,
@@ -117,7 +126,7 @@ function makeCrystal(texture, radius, seed) {
 function makeShards(count, depth, seed) {
   const r = rand(seed)
   const geo = new THREE.TetrahedronGeometry(1, 0)
-  const mat = new THREE.MeshPhysicalMaterial({
+  const mat = physMat({
     color: 0xffffff,
     metalness: 0.6,
     roughness: 0.2,
@@ -164,13 +173,19 @@ function makeDust(count, depth, seed) {
  * @param {{ images: string[], mode: 'journey' | 'ambient', spacing?: number,
  *           onProgress?: (p: number) => void, onReady?: () => void }} opts
  */
+const whenIdle = (cb) => (window.requestIdleCallback ? window.requestIdleCallback(cb, { timeout: 1500 }) : setTimeout(cb, 200))
+
 export function createSpace(canvas, opts) {
   const { images, mode, spacing = 11, onProgress, onReady } = opts
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' })
   // máy yếu / màn hẹp: giảm độ phân giải render và số hạt
-  const low = window.innerWidth < 768 || (navigator.hardwareConcurrency || 8) <= 4
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, low ? 1 : 1.5))
+  const soft = isSoftwareGL(renderer)
+  lightMaterials = soft
+  const low = soft || window.innerWidth < 768 || (navigator.hardwareConcurrency || 8) <= 4
+  renderer.setPixelRatio(soft ? 0.5 : Math.min(window.devicePixelRatio, low ? 1 : 1.5))
+  const minFrameMs = soft ? 66 : 0 // không GPU: tối đa ~15 khung/giây
+  let lastDraw = 0
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.toneMappingExposure = 1.15
@@ -194,10 +209,18 @@ export function createSpace(canvas, opts) {
 
   const count = images.length
   const depth = mode === 'journey' ? count * spacing + 20 : 30
-  const crystals = images.map((src, i) => {
+  // Dựng cảnh từng phần qua nhiều lần rảnh của trình duyệt (không tạo một tác vụ dài).
+  const crystals = []
+  const buildCrystal = (src, i) => {
     let c
     // src = null → khối pha lê đặc không ảnh
-    const tex = src ? loader.load(src, (t) => c.userData.fit(t.image.width, t.image.height)) : null
+    const tex = src
+      ? loader.load(src, (t) => {
+          c.userData.fit(t.image.width, t.image.height)
+          // đẩy ảnh lên GPU lần lượt khi trình duyệt rảnh, tránh dồn vào khung hình đầu
+          whenIdle(() => running && renderer.initTexture(t))
+        })
+      : null
     if (tex) {
       tex.colorSpace = THREE.SRGBColorSpace
       tex.anisotropy = renderer.capabilities.getMaxAnisotropy()
@@ -210,14 +233,23 @@ export function createSpace(canvas, opts) {
     }
     c.userData.spin = 0.12 + (i % 3) * 0.05
     scene.add(c)
-    return c
-  })
+    crystals.push(c)
+  }
   if (!images.some(Boolean)) onReady?.()
 
-  const shards = makeShards(Math.round((mode === 'journey' ? 420 : 160) * (low ? 0.45 : 1)), depth, 7)
-  scene.add(shards.mesh)
-  const dust = makeDust(Math.round((mode === 'journey' ? 2600 : 1200) * (low ? 0.4 : 1)), depth, 11)
-  scene.add(dust)
+  let shards = { mesh: null, data: [] }
+  let dust = null
+  const steps = [
+    ...images.map((src, i) => () => buildCrystal(src, i)),
+    () => {
+      shards = makeShards(Math.round((mode === 'journey' ? 420 : 160) * (low ? 0.45 : 1)), depth, 7)
+      scene.add(shards.mesh)
+    },
+    () => {
+      dust = makeDust(Math.round((mode === 'journey' ? 2600 : 1200) * (low ? 0.4 : 1)), depth, 11)
+      scene.add(dust)
+    },
+  ]
 
   const mouse = { x: 0, y: 0, tx: 0, ty: 0 }
   const onMouse = (e) => {
@@ -296,13 +328,38 @@ export function createSpace(canvas, opts) {
       m.compose(d.p, q, sv)
       shards.mesh.setMatrixAt(i, m)
     })
-    shards.mesh.instanceMatrix.needsUpdate = true
-    if (!reduced) dust.rotation.z = t * 0.01
+    if (shards.mesh) shards.mesh.instanceMatrix.needsUpdate = true
+    if (dust && !reduced) dust.rotation.z = t * 0.01
 
-    renderer.render(scene, camera)
+    const now = performance.now()
+    if (now - lastDraw >= minFrameMs) {
+      lastDraw = now
+      renderer.render(scene, camera)
+    }
     raf = requestAnimationFrame(frame)
   }
-  raf = requestAnimationFrame(frame)
+  // Biên dịch shader không đồng bộ rồi mới bắt đầu vẽ; canvas hiện dần sau khung hình đầu.
+  canvas.style.opacity = '0'
+  canvas.style.transition = 'opacity 0.8s ease'
+  const begin = () => {
+    if (!running) return
+    raf = requestAnimationFrame(() => {
+      frame()
+      canvas.style.opacity = '1'
+    })
+  }
+  const runSteps = () => {
+    if (!running) return
+    const step = steps.shift()
+    if (step) {
+      step()
+      whenIdle(runSteps)
+      return
+    }
+    resize()
+    ;(renderer.compileAsync ? renderer.compileAsync(scene, camera) : Promise.resolve()).catch(() => {}).then(begin)
+  }
+  whenIdle(runSteps)
 
   return {
     setProgress(p) {

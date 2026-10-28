@@ -6,7 +6,7 @@ export default function PageHero({ eyebrow, title, lead, image = 'factory-floor'
   return (
     <>
       <SpaceBackground />
-      <section className="page-hero" style={{ '--bg': `url(/images/${image}.webp)` }}>
+      <section className="page-hero" style={{ '--bg': `url(/images/${image}.webp)`, '--bg-md': `url(/images/${image}-md.webp)` }}>
         <div className="container page-hero__inner">
           <nav className="breadcrumb mono-label" aria-label="Breadcrumb">
             <Link to="/">Trang chủ</Link>

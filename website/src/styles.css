@@ -3306,3 +3306,13 @@ body.menu-open .fab {
     max-height: none;
   }
 }
+
+/* Màn nhỏ: ảnh nền cỡ vừa (900px) — đúng độ phân giải hiển thị, tải nhanh hơn */
+@media (max-width: 900px) {
+  .page-hero::before {
+    background-image: var(--bg-md, var(--bg));
+  }
+  .cta-band::before {
+    background-image: url(/images/factory-floor-md.webp);
+  }
+}

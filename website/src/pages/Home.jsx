@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { usePageTitle } from '../hooks/useReveal.js'
+import { afterLoadIdle, hasHardwareGL } from '../three/defer.js'
 import { company, journey, keyStats } from '../content.js'
 
 const N = journey.length
@@ -11,6 +12,16 @@ export default function Home() {
   const canvasRef = useRef(null)
   const chipRef = useRef(null)
   const panelRef = useRef(null)
+  const panelSize = useRef({ w: 0, h: 0 })
+  useEffect(() => {
+    const panel = panelRef.current
+    if (!panel || !('ResizeObserver' in window)) return
+    const ro = new ResizeObserver(([e]) => {
+      panelSize.current = { w: e.target.offsetWidth, h: e.target.offsetHeight }
+    })
+    ro.observe(panel)
+    return () => ro.disconnect()
+  })
   const engineRef = useRef(null)
   const activeRef = useRef(0)
   const [failed, setFailed] = useState(false)
@@ -29,8 +40,9 @@ export default function Home() {
     }
     const W = window.innerWidth
     const H = window.innerHeight
-    const pw = panel.offsetWidth
-    const ph = panel.offsetHeight
+    // kích thước bảng được cache (ResizeObserver) — tránh đo lại bố cục mỗi khung hình
+    const pw = panelSize.current.w || panel.offsetWidth
+    const ph = panelSize.current.h || panel.offsetHeight
     const gap = 56
     const onLeft = info.x < W / 2
     let x = onLeft ? info.x + info.r + gap : info.x - info.r - gap - pw
@@ -66,8 +78,10 @@ export default function Home() {
     }
     let engine
     let dead = false
-    import('../three/space.js')
-      .then(({ createSpace }) => {
+    const cancel = afterLoadIdle(() =>
+      !hasHardwareGL()
+        ? setFailed(true)
+        : import('../three/space.js').then(({ createSpace }) => {
         if (dead) return
         engine = createSpace(canvasRef.current, {
           images: journey.map((j) => `/images/${j.image}-sm.webp`),
@@ -75,10 +89,11 @@ export default function Home() {
         })
         engineRef.current = engine
         raf = requestAnimationFrame(tick)
-      })
-      .catch(() => setFailed(true))
+      }).catch(() => setFailed(true)),
+    )
     return () => {
       dead = true
+      cancel()
       cancelAnimationFrame(raf)
       engine?.dispose()
       engineRef.current = null
@@ -117,7 +132,7 @@ export default function Home() {
       <div className="journey" ref={wrapRef} style={{ height: `${(N + 1.5) * 100}vh` }}>
         <div className="journey__stage" aria-hidden="true">
           {!failed && <canvas ref={canvasRef} className="journey__canvas" />}
-          {failed && <img className="journey__fallback" src={`/images/${item.image}.webp`} alt="" key={item.image} />}
+          {failed && <img className="journey__fallback" src={`/images/${item.image}-sm.webp`} alt="" key={item.image} />}
           <div className="space-bg__grain" />
           <span ref={chipRef} className="journey__chip">
             {item.name}

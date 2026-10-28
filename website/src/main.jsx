@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { startTransition } from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import '@fontsource-variable/inter-tight'
@@ -11,10 +11,14 @@ import App from './App.jsx'
 if ('scrollRestoration' in history) history.scrollRestoration = 'manual'
 window.addEventListener('beforeunload', () => window.scrollTo(0, 0))
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
-  </React.StrictMode>,
-)
+// Render lần đầu ở chế độ transition: React chia nhỏ công việc, không khóa luồng chính.
+const root = ReactDOM.createRoot(document.getElementById('root'))
+startTransition(() => {
+  root.render(
+    <React.StrictMode>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </React.StrictMode>,
+  )
+})

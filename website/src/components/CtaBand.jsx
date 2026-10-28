@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { hasHardwareGL } from '../three/defer.js'
 
 // Dải dẫn tới form "Request a Quote" (sản phẩm, số lượng, đính kèm bản vẽ — theo brief).
 // Bố cục: tiêu đề giữa, nút viên tròn, 3 sản phẩm 3D (vỉ làm nguội, kệ dao gỗ, búa đập thịt) trên sàn sáng.
@@ -22,6 +23,7 @@ export default function CtaBand() {
       ([e]) => {
         if (!e.isIntersecting) return
         io.disconnect()
+        if (!hasHardwareGL()) return setFailed(true)
         import('../three/showcase.js')
           .then(({ createShowcase }) => {
             if (!dead) dispose = createShowcase(canvasRef.current)

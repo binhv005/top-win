@@ -14,7 +14,13 @@ export default function About() {
       <section className="section section--light">
         <div className="container two-col">
           <figure className="two-col__media" data-reveal>
-            <img src="/images/factory-floor.webp" alt="Khu vực sản xuất trong nhà máy Top Win" loading="lazy" />
+            <img
+              src="/images/factory-floor.webp"
+              srcSet="/images/factory-floor-md.webp 900w, /images/factory-floor.webp 1200w"
+              sizes="(max-width: 960px) 100vw, 640px"
+              alt="Khu vực sản xuất trong nhà máy Top Win"
+              loading="lazy"
+            />
           </figure>
           <div data-reveal>
             <h2 className="section-title">Về Top Win</h2>

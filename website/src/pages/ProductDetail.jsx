@@ -55,7 +55,13 @@ export default function ProductDetail() {
                 </ul>
               )}
               <figure className="pd__photo">
-                <img src={`/images/${item.images[img]}.webp`} alt={item.name} key={item.images[img]} />
+                <img
+                  src={`/images/${item.images[img]}.webp`}
+                  srcSet={`/images/${item.images[img]}-md.webp 900w, /images/${item.images[img]}.webp 1200w`}
+                  sizes="(max-width: 960px) 100vw, 682px"
+                  alt={item.name}
+                  key={item.images[img]}
+                />
               </figure>
             </div>
 

@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { isSoftwareGL } from './gpu.js'
 
 // Sân khấu 3D cho dải "Yêu cầu báo giá": mô hình dựng bằng code của 3 sản phẩm Top Win
 // (vỉ làm nguội bánh, kệ dao gỗ, búa đập thịt) đặt trên sàn sáng có bóng đổ.
@@ -157,7 +158,11 @@ function meatTenderizer() {
 export function createShowcase(canvas) {
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, window.innerWidth < 768 ? 1.25 : 1.75))
+  const soft = isSoftwareGL(renderer)
+  renderer.setPixelRatio(soft ? 0.6 : Math.min(window.devicePixelRatio, window.innerWidth < 768 ? 1.25 : 1.75))
+  if (soft) renderer.shadowMap.enabled = false
+  const minFrameMs = soft ? 66 : 0
+  let lastDraw = 0
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.shadowMap.enabled = true
@@ -239,11 +244,19 @@ export function createShowcase(canvas) {
       block.rotation.y = 0.5 + Math.sin(t * 0.4 + 1) * 0.25
       hammer.rotation.y = -0.6 + t * 0.35
     }
+    const now = performance.now()
+    if (now - lastDraw < minFrameMs) return
+    lastDraw = now
     renderer.render(scene, camera)
   }
-  frame()
+  // biên dịch shader không đồng bộ trước khi vẽ để không khóa luồng chính
+  let stopped = false
+  ;(renderer.compileAsync ? renderer.compileAsync(scene, camera) : Promise.resolve()).catch(() => {}).then(() => {
+    if (!stopped) frame()
+  })
 
   return () => {
+    stopped = true
     cancelAnimationFrame(raf)
     io.disconnect()
     window.removeEventListener('resize', resize)
